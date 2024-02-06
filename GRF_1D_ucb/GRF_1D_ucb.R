@@ -8,21 +8,21 @@ source("support/functions.R")
 
 ptm <- proc.time()
 # Data initializing  ------------------------------------------------------
-tau = c(0.05) #confidence level
+tau = c(0.5) #confidence level
 sig = 1 #sigma in error
 #widths = c(0.001,0.01, 0.04, 0.1, 0.2) # used for the plot along with for loop
 width = 0.2 #eeta
 c = 5 #constant
 n1 = 500 #data points for x1 
-b = 500 #number of bootstraps for MBS
-reps = 100 #repititions of whole simulation
+b = 1000 #number of bootstraps for MBS
+reps = 100 #repetitions of whole simulation
 grids_x1 = 20 #grid points for CBs
 grids_x1_list = c(15,20,30,50, 100)
 set.seed(100)
 node_size = c(5) #h
 node_sizes = c(2,5,7,10,15) #bias controlling param of RFS
 x2_fixed = c(0.3,0.5) #fix x2
-alpha_sig = 0.1
+alpha_sig = 0.05
 
 rfs = list()
 T_stats = list()
@@ -60,16 +60,18 @@ Y = get_y(X, theta_fun, sig, NULL,reps)
 n = nrow(X)
 
 ## Test set
-X_test = get_x(grids_x1)
+X_test = get_x(grids_x1, seed = 123)
 theta_true_test = theta_triangle(X_test,  cal_type = cal_type, c = theta_0)# + qnorm(tau)*sig
 grids = nrow(X_test)
 
 ## Fitting the forest ----
 rf= fit_forest(X,Y,tau = tau,node_size = node_size)
-theta_hat_test = predict_forest(rf,X_test)
+preds = predict_forest(rf,X_test)
+theta_hat_test = lapply(1:reps, function(j) preds[[j]]$predictions)
 w_test = weights_forest(rf,X_test)
 mat <- do.call("cbind",theta_hat_test)
 theta_hat_expected = rowMeans(mat)
+
 
 ## Calculations for quantile forest ----
 # kde = lapply(1:reps, function (j) density(Y_test[,j], n=nrow(X))) #estimation of the density
@@ -89,12 +91,20 @@ theta_hat_expected = rowMeans(mat)
 ## Calculation for regression forest
 V_hat = -1
 psi = lapply(1:reps, function(k) t(sapply(1:nrow(X_test), function(j) (Y[,k]-theta_hat_test[[k]][j]))))
-H_hat = sapply(1:reps, function(j) n* apply(w_test[[j]]*psi[[j]],1,var))
-sigma_hat = (H_hat)^(1/2)
+#H_hat = sapply(1:reps, function(j) n* apply(w_test[[j]]*psi[[j]],1,var))
+#sigma_hat = (H_hat)^(1/2)
+
+## alternative formulation for forest variance
+var_hat = sapply(1:reps, function(j) preds[[j]]$variance.estimates)
+sigma_hat = (var_hat)^(1/2)
+
+
 e_multipliers = lapply(1:reps, function(j) lapply(1:b, function(j) rnorm(n, 0, 1)))
 T_stat = lapply(1:reps, function(k) sapply(1:b, function(j)
-  ((H_hat[,k]^(-1/2)*w_test[[k]]*psi[[k]])%*% e_multipliers[[k]][[j]])@x))
+  ((var_hat[,k]^(-1/2)*w_test[[k]]*psi[[k]])%*% e_multipliers[[k]][[j]])@x))
 T_stat_abs = lapply(1:reps, function(j) abs((T_stat[[j]])))
+
+
 
 ## just for simplicity, renaming test sets as original sets
 # X = X_test
@@ -132,6 +142,8 @@ uniform_T_max = lapply(1:reps, function(j) apply(uniform_T_stat[[j]], 2, max)) #
 uniform_q_star = lapply(1:reps, function(j) quantile(uniform_T_max[[j]], 1-alpha_sig)) # quantile of max_t_stat
 
 uniform_CI = confidence_interval(theta_hat_test, uniform_q_star, sigma_hat, reps)
+
+
 coverage_true_uniform = coverage_uniform(theta_true_test, uniform_CI, grids,reps)
 coverage_expected_uniform = coverage_uniform(theta_hat_expected, uniform_CI, grids,reps)
 
@@ -155,7 +167,9 @@ coverages_widths_uniform[[as.character(grids_x1)]] = coverage_true_uniform
 #coverages_PW_std[[as.character(theta_0)]] = coverage_std_pw
 #coverages_uniform_std[[as.character(theta_0)]] = coverage_std_uniform
 
-## calulating size
+## calculating size
+# Size is defined as prob of type 1 error (false positive) given true theta is 0
+# 
 size_pw = 1-(coverage_true_pw/100)
 size_std_pw = 1-(coverage_std_pw/100)
 size_uni = 1-(coverage_true_uniform/100)
