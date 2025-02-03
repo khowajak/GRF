@@ -221,4 +221,9 @@ cat("Size (Standard Uniform):", size_std_uni, "\n")
 cat("Coverage (Bootstrap Pointwise):", coverage_bootstrap_pw, "\n")
 cat("Coverage (Standard Pointwise):", coverage_std_pw, "\n")
 cat("Coverage (Bootstrap Uniform):", coverage_bootstrap_uniform, "\n")
-cat("Coverage (Standard Unif
+cat("Coverage (Standard Uniform):", coverage_std_uniform, "\n")
+
+
+
+
+
